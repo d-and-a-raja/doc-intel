@@ -1,6 +1,7 @@
 import os
 import json
 from flask import Flask, request, render_template, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
@@ -9,6 +10,7 @@ from azure.core.credentials import AzureKeyCredential
 load_dotenv()
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB limit
 
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "tiff", "bmp"}
