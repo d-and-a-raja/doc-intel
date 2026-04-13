@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice Analyzer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 60px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #0f3460;
+    }
+
+    p.subtitle {
+      font-size: 0.95rem;
+      color: #555;
+      margin-bottom: 32px;
+    }
+
+    /* Upload card */
+    .upload-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #a0b4d6;
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #0f3460;
+      background: #f5f8ff;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .drop-zone .label {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #0f3460;
+    }
+
+    .drop-zone .hint {
+      font-size: 0.82rem;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    #file-name {
+      margin-top: 12px;
+      font-size: 0.88rem;
+      color: #444;
+      min-height: 20px;
+      text-align: center;
+    }
+
+    .btn-analyze {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px;
+      background: #0f3460;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-analyze:hover:not(:disabled) { background: #16213e; }
+    .btn-analyze:disabled { background: #8fa5c0; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #d0dff0;
+      border-top-color: #0f3460;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner-label { font-size: 0.9rem; color: #555; }
+
+    /* Error */
+    .error-box {
+      display: none;
+      background: #fff0f0;
+      border: 1px solid #f5c2c2;
+      border-radius: 10px;
+      color: #c0392b;
+      padding: 14px 18px;
+      margin-top: 24px;
+      font-size: 0.92rem;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    /* Results */
+    .results-section {
+      display: none;
+      width: 100%;
+      max-width: 760px;
+      margin-top: 36px;
+    }
+
+    .results-section h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f3460;
+      margin-bottom: 16px;
+    }
+
+    .doc-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .doc-header {
+      background: #0f3460;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .doc-header .model-name {
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    .confidence-badge {
+      background: rgba(255,255,255,0.18);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .confidence-badge.high   { background: rgba(39,174,96,0.25); }
+    .confidence-badge.medium { background: rgba(241,196,15,0.3); color: #856404; }
+    .confidence-badge.low    { background: rgba(231,76,60,0.25); }
+
+    /* Fields table */
+    .fields-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    .fields-table thead tr {
+      background: #f5f7fb;
+      color: #555;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .fields-table th, .fields-table td {
+      padding: 12px 20px;
+      text-align: left;
+      border-bottom: 1px solid #eef0f4;
+    }
+
+    .fields-table tbody tr:last-child td { border-bottom: none; }
+
+    .fields-table tbody tr:hover { background: #fafbfd; }
+
+    .field-name {
+      font-weight: 600;
+      color: #2c3e50;
+      white-space: nowrap;
+    }
+
+    .field-value { color: #333; }
+
+    .conf-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .conf-high   { background: #eafaf1; color: #1e8449; }
+    .conf-medium { background: #fef9e7; color: #9a7d0a; }
+    .conf-low    { background: #fdedec; color: #c0392b; }
+    .conf-na     { background: #f2f3f4; color: #888; }
+  </style>
+</head>
+<body>
+
+  <h1>Invoice Analyzer</h1>
+  <p class="subtitle">Upload an invoice or purchase order to extract fields using Azure Document Intelligence.</p>
+
+  <div class="upload-card">
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" />
+      <span class="icon">&#128196;</span>
+      <span class="label">Click to upload or drag &amp; drop</span>
+      <p class="hint">PDF, JPG, PNG, TIFF, BMP &mdash; up to 20 MB</p>
+    </div>
+    <div id="file-name"></div>
+    <button class="btn-analyze" id="btn-analyze" disabled>Analyze Document</button>
+  </div>
+
+  <div class="spinner-wrap" id="spinner-wrap">
+    <div class="spinner"></div>
+    <span class="spinner-label">Sending to Azure Document Intelligence&hellip;</span>
+  </div>
+
+  <div class="error-box" id="error-box"></div>
+
+  <div class="results-section" id="results-section">
+    <h2>Extraction Results</h2>
+    <div id="results-container"></div>
+  </div>
+
+  <script>
+    const fileInput   = document.getElementById("file-input");
+    const dropZone    = document.getElementById("drop-zone");
+    const fileNameEl  = document.getElementById("file-name");
+    const btnAnalyze  = document.getElementById("btn-analyze");
+    const spinnerWrap = document.getElementById("spinner-wrap");
+    const errorBox    = document.getElementById("error-box");
+    const resultsSection   = document.getElementById("results-section");
+    const resultsContainer = document.getElementById("results-container");
+
+    // Drag-and-drop visual feedback
+    dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+    dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        onFileChosen();
+      }
+    });
+
+    fileInput.addEventListener("change", onFileChosen);
+
+    function onFileChosen() {
+      const f = fileInput.files[0];
+      if (f) {
+        fileNameEl.textContent = f.name + "  (" + (f.size / 1024).toFixed(1) + " KB)";
+        btnAnalyze.disabled = false;
+      } else {
+        fileNameEl.textContent = "";
+        btnAnalyze.disabled = true;
+      }
+      hideResults();
+    }
+
+    btnAnalyze.addEventListener("click", async () => {
+      const f = fileInput.files[0];
+      if (!f) return;
+
+      hideResults();
+      showSpinner(true);
+      btnAnalyze.disabled = true;
+
+      const formData = new FormData();
+      formData.append("file", f);
+
+      try {
+        const resp = await fetch("/analyze", { method: "POST", body: formData });
+        const data = await resp.json();
+
+        if (!resp.ok || data.error) {
+          showError(data.error || "Unexpected error from server.");
+        } else {
+          renderResults(data.results);
+        }
+      } catch (err) {
+        showError("Network error: " + err.message);
+      } finally {
+        showSpinner(false);
+        btnAnalyze.disabled = false;
+      }
+    });
+
+    function showSpinner(on) {
+      spinnerWrap.style.display = on ? "flex" : "none";
+    }
+
+    function showError(msg) {
+      errorBox.textContent = "Error: " + msg;
+      errorBox.style.display = "block";
+    }
+
+    function hideResults() {
+      errorBox.style.display = "none";
+      resultsSection.style.display = "none";
+      resultsContainer.innerHTML = "";
+    }
+
+    function confClass(val) {
+      if (val === null || val === undefined) return "conf-na";
+      if (val >= 85) return "conf-high";
+      if (val >= 65) return "conf-medium";
+      return "conf-low";
+    }
+
+    function overallClass(val) {
+      if (val >= 85) return "high";
+      if (val >= 65) return "medium";
+      return "low";
+    }
+
+    function renderResults(results) {
+      resultsContainer.innerHTML = "";
+
+      if (!results || results.length === 0) {
+        resultsContainer.innerHTML = "<p style='color:#888;padding:16px'>No documents detected in the file.</p>";
+        resultsSection.style.display = "block";
+        return;
+      }
+
+      results.forEach((doc, idx) => {
+        const card = document.createElement("div");
+        card.className = "doc-card";
+
+        const overallConf = doc.confidence;
+        const cls = overallClass(overallConf);
+
+        // Header
+        card.innerHTML = `
+          <div class="doc-header">
+            <div>
+              <div style="font-weight:700;font-size:1rem;">Document ${idx + 1}</div>
+              <div class="model-name">${escHtml(doc.doc_type || "")}</div>
+            </div>
+            <span class="confidence-badge ${cls}">Overall Confidence: ${overallConf}%</span>
+          </div>`;
+
+        // Fields table
+        const fieldEntries = Object.entries(doc.fields);
+        if (fieldEntries.length === 0) {
+          card.innerHTML += `<p style="padding:16px;color:#888">No fields extracted.</p>`;
+        } else {
+          let rows = fieldEntries.map(([name, fdata]) => {
+            const confVal  = fdata.confidence;
+            const confText = confVal !== null && confVal !== undefined ? confVal + "%" : "N/A";
+            const pillCls  = confClass(confVal);
+            return `
+              <tr>
+                <td class="field-name">${escHtml(name)}</td>
+                <td class="field-value">${escHtml(fdata.value)}</td>
+                <td><span class="conf-pill ${pillCls}">${confText}</span></td>
+              </tr>`;
+          }).join("");
+
+          card.innerHTML += `
+            <table class="fields-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Extracted Value</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>`;
+        }
+
+        resultsContainer.appendChild(card);
+      });
+
+      resultsSection.style.display = "block";
+    }
+
+    function escHtml(str) {
+      if (str == null) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>
